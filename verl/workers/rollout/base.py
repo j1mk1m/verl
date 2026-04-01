@@ -20,7 +20,8 @@ import torch
 from torch.distributed.device_mesh import DeviceMesh
 
 from verl import DataProto
-from verl.workers.config import HFModelConfig, RolloutConfig
+from verl.utils.config import omega_conf_to_dataclass
+from verl.workers.config import DiffusionModelConfig, HFModelConfig, RolloutConfig
 
 __all__ = ["BaseRollout"]
 
@@ -31,11 +32,13 @@ class BaseRollout(ABC):
     def __init__(
         self,
         config: RolloutConfig,
-        model_config: HFModelConfig,
+        model_config: HFModelConfig | DiffusionModelConfig,
         device_mesh: DeviceMesh,
+        *args,
+        **kwargs,
     ):
-        self.config = config
-        self.model_config = model_config
+        self.config = omega_conf_to_dataclass(config)
+        self.model_config: HFModelConfig | DiffusionModelConfig = omega_conf_to_dataclass(model_config)
         self.device_mesh = device_mesh
 
     @abstractmethod
@@ -78,19 +81,19 @@ class BaseRollout(ABC):
 
 
 _ROLLOUT_REGISTRY = {
-    ("vllm", "sync"): "verl.workers.rollout.vllm_rollout.vLLMRollout",
-    ("vllm", "async"): "verl.workers.rollout.vllm_rollout.vLLMAsyncRollout",
-    ("sglang", "sync"): "verl.workers.rollout.sglang_rollout.sglang_rollout.SGLangRollout",
+    ("vllm", "async"): "verl.workers.rollout.vllm_rollout.ServerAdapter",
+    ("vllm_omni", "async"): "verl.workers.rollout.vllm_rollout.ServerAdapter",
     ("sglang", "async"): "verl.workers.rollout.sglang_rollout.sglang_rollout.ServerAdapter",
+    ("trtllm", "async"): "verl.workers.rollout.trtllm_rollout.trtllm_rollout.ServerAdapter",
 }
 
 
-def get_rollout_class(rollout_name: str, mode: str) -> type[BaseRollout]:
+def get_rollout_class(rollout_name: str, mode: str = "async") -> type[BaseRollout]:
     """Get the rollout class by name.
 
     Args:
         rollout_name: The name of the rollout.
-        mode: The mode of the rollout, sync: spmd mode, async: server mode.
+        mode: The mode of the rollout, async: server mode.
 
     Returns:
         The rollout class.
